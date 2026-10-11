@@ -1,0 +1,16 @@
+id,phase,create2shelf_ms,shelf2init_ms,init2open_ms,open2total_ms,total_ms,pages,inode,open_ok
+bench_cbz,cold,RESULT|bench_cbz-cold|create2shelf=-|shelf2init=-|init2open=69|open2total=2|init2total=71|total=-|pages=3|open_total_found=yes
+bench_cbz,cold,,,,,,,1336572,yes(重解压)
+bench_cbz,warm,,,,,,,1366824,yes(重解压)
+bench_cbz_l,cold,RESULT|bench_cbz_l-cold|create2shelf=-|shelf2init=-|init2open=1760|open2total=181|init2total=1941|total=-|pages=200|open_total_found=yes
+bench_cbz_l,cold,,,,,,,1367070,yes(重解压)
+bench_cbz_l,warm,,,,,,,1391463,yes(重解压)
+bench_demo,cold,RESULT|bench_demo-cold|create2shelf=-|shelf2init=-|init2open=51|open2total=82|init2total=133|total=-|pages=6|open_total_found=yes
+bench_demo,cold,,,,,,,,no
+bench_demo,warm,,,,,,,,no
+bench_epub_s,cold,RESULT|bench_epub_s-cold|create2shelf=-|shelf2init=-|init2open=63|open2total=69|init2total=132|total=-|pages=305|open_total_found=yes
+bench_epub_s,cold,,,,,,,1403845,yes(重解压)
+bench_epub_s,warm,,,,,,,1403845,no
+bench_pdf,cold,RESULT|bench_pdf-cold|create2shelf=-|shelf2init=-|init2open=-|open2total=-|init2total=-|total=-|pages=-|open_total_found=NO
+bench_pdf,cold,,,,,,,,no
+bench_pdf,warm,,,,,,,,no

@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_parsers",
+    "type": "har",
+    "description": "OhEngine format parsers (EPUB, HTML, CSS, TXT, CBZ)",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

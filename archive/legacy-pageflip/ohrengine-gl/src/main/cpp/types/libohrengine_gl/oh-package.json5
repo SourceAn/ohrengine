@@ -1,0 +1,9 @@
+{
+  "name": "libohrengine_gl.so",
+  "version": "1.0.0",
+  "description": "ohrengine-gl native module",
+  "main": "Index.d.ts",
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {}
+}

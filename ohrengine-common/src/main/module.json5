@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_common",
+    "type": "har",
+    "description": "OhEngine common types, models, services, and registries",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

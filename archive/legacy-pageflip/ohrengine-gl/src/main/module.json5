@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_gl",
+    "type": "har",
+    "description": "OhEngine GLES page-curl flip engine (GPU shader rendering)",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

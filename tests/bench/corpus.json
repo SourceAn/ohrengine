@@ -1,0 +1,130 @@
+{
+  "$comment": "OhEngine 标准 Bench 语料清单（便携：只记录相对路径 + 生成规则，不绑定绝对路径）。设备侧由 ohosTest(BenchCorpusTest) 按本表生成/释放，故本表必须与 entry/src/ohosTest/ets/unit/BenchCorpusOHOSTest.ets 的 CORPUS 一一对应。",
+  "version": 2,
+  "updated": "2026-10-09",
+  "deviceBookDir": "<filesDir>/books",
+  "notes": [
+    "deviceInjected=true 的条目由设备内用例生成（无 root 设备唯一可行通道）",
+    "设备内生成档的字节数以 hilog BENCH_CORPUS 埋点为准（本机 corpus/ 仅用于有直推通道的设备或离线核对）"
+  ],
+  "samples": [
+    {
+      "id": "demo",
+      "target": "bench_demo.txt",
+      "format": "txt",
+      "mode": "copy",
+      "source": "entry/src/main/resources/rawfile/demo.txt",
+      "deviceInjected": true,
+      "purpose": "极小样本边界（open/分页最短路径）"
+    },
+    {
+      "id": "txt-s",
+      "target": "bench_txt_s.txt",
+      "format": "txt",
+      "mode": "generated",
+      "gen": { "from": "《一念永恒》（校对版全本）.txt", "bytes": 262144, "align": "chapter" },
+      "sizeBytes": 262144,
+      "deviceInjected": true,
+      "purpose": "TXT 小档：open/分页/缓存全链路（设备内实际 ~291KB）"
+    },
+    {
+      "id": "txt-m",
+      "target": "bench_txt_m.txt",
+      "format": "txt",
+      "mode": "generated",
+      "gen": { "from": "《一念永恒》（校对版全本）.txt", "bytes": 2097152, "align": "chapter" },
+      "sizeBytes": 2097152,
+      "deviceInjected": true,
+      "purpose": "TXT 中档：冷启动索引 + L2/L3 命中对比（设备内实际 ~2.1MB）"
+    },
+    {
+      "id": "txt-l",
+      "target": "bench_txt_l.txt",
+      "format": "txt",
+      "mode": "generated",
+      "gen": { "from": "《一念永恒》（校对版全本）.txt", "bytes": 7774272, "align": "chapter" },
+      "sizeBytes": 7774272,
+      "deviceInjected": true,
+      "purpose": "TXT 大档：长篇小说规模（设备内实际 ~7.8MB），后台 reflow 压力"
+    },
+    {
+      "id": "txt-xl",
+      "target": "bench_txt_xl.txt",
+      "format": "txt",
+      "mode": "generated",
+      "gen": { "from": "《一念永恒》（校对版全本）.txt", "bytes": 52428800, "repeat": true, "align": "chapter" },
+      "sizeBytes": 52428800,
+      "deviceInjected": true,
+      "purpose": "TXT 超大档：50MB，索引构建/内存上界压力"
+    },
+    {
+      "id": "epub-s",
+      "target": "bench_epub_s.epub",
+      "format": "epub",
+      "mode": "rawfile-copy",
+      "rawfile": "test.epub",
+      "deviceInjected": true,
+      "purpose": "中文 EPUB（=《妹妹人生_上卷》2.2MB）：CJK 断行 + CSS 复杂度"
+    },
+    {
+      "id": "cbz",
+      "target": "bench_cbz.cbz",
+      "format": "cbz",
+      "mode": "rawfile-copy",
+      "rawfile": "test.cbz",
+      "deviceInjected": true,
+      "purpose": "CBZ 小档（3 页/76KB）：Image 策略 + 图片解码路径冒烟"
+    },
+    {
+      "id": "cbz-l",
+      "target": "bench_cbz_l.cbz",
+      "format": "cbz",
+      "mode": "device-zip",
+      "deviceGen": { "raw": "shared_text_page.png", "pages": 200, "pageBytes": 1572864 },
+      "deviceInjected": true,
+      "purpose": "CBZ 真实规模（200 页 × 1.5MB ≈ 300MB 解压量）：量化 ZIP 类每次打开全量解压的代价；中间产物测后自删"
+    },
+    {
+      "id": "pdf",
+      "target": "bench_pdf.pdf",
+      "format": "pdf",
+      "mode": "rawfile-copy",
+      "rawfile": "微舆.pdf",
+      "deviceInjected": true,
+      "purpose": "PDF 文本层提取 → 可重排（5.3MB）"
+    },
+    {
+      "id": "epub-v3",
+      "target": "bench_epub_v3.epub",
+      "format": "epub",
+      "mode": "copy",
+      "source": "The_Adventures_of_Sherlock_Holmes_by_Arthur_Conan_Doyle.3.epub",
+      "deviceInjected": false,
+      "optional": true,
+      "purpose": "EPUB3 英文（379KB）：仅本机生成，用于有直推通道的设备/离线解析核对"
+    },
+    {
+      "id": "epub-en",
+      "target": "bench_epub_en.epub",
+      "format": "epub",
+      "mode": "copy",
+      "source": "The_Adventures_of_Sherlock_Holmes_by_Arthur_Conan_Doyle.epub",
+      "deviceInjected": false,
+      "optional": true,
+      "purpose": "EPUB2 英文（311KB）：仅本机生成，同上"
+    }
+  ],
+  "metrics": [
+    { "key": "openMs", "source": "OhEngineCore.benchOpenMs / CacheStats[open] openMs=", "unit": "ms", "meaning": "open() 总耗时" },
+    { "key": "restoreMs", "source": "OhEngineCore.benchRestoreMs", "unit": "ms", "meaning": "阅读位置恢复耗时" },
+    { "key": "txtLazyIdxMs", "source": "OhEngineCore.benchTxtLazyIndexMs", "unit": "ms", "meaning": "TXT 惰性索引构建（0=磁盘索引命中）" },
+    { "key": "t_anchor_ms", "source": "COLDSTART ANCHOR_RESOLVED", "unit": "ms", "meaning": "SESSION_OPEN → 锚点页就绪（设备钟）" },
+    { "key": "t_firstFrame_ms", "source": "COLDSTART FIRST_FRAME", "unit": "ms", "meaning": "SESSION_OPEN → 首帧可见（设备钟）" },
+    { "key": "totalPages", "source": "OPEN_TOTAL page= total=", "unit": "页", "meaning": "全书页数" },
+    { "key": "layoutChapterMs", "source": "LAYOUT_CHAPTER total=", "unit": "ms", "meaning": "单章排版耗时分布" },
+    { "key": "bgChapterMs", "source": "COLDSTART BACKGROUND_CHAPTER ms=", "unit": "ms", "meaning": "后台 reflow 每章耗时" },
+    { "key": "flip", "source": "finishFlip frames/avgMs/maxMs", "unit": "ms", "meaning": "翻页动画每帧 JS 提交耗时" },
+    { "key": "rss_kb", "source": "/proc/<pid>/status VmRSS", "unit": "KB", "meaning": "进程常驻内存" },
+    { "key": "blocks/crashes", "source": "THREAD_BLOCK/APPFREEZE/APPCRASH", "unit": "次", "meaning": "主线程阻塞与崩溃" }
+  ]
+}

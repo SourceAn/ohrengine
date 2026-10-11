@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_pdf_exclusive",
+    "type": "har",
+    "description": "OhEngine PDF format exclusive features (stub)",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

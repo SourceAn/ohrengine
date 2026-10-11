@@ -1,0 +1,9 @@
+{
+  "name": "ohrengine-txt-exclusive",
+  "version": "1.0.0",
+  "description": "OhEngine TXT format exclusive features (chapter detection, paragraph splitting)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common"
+  }
+}

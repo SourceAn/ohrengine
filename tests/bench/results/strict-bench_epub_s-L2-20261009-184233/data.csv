@@ -1,0 +1,4 @@
+run_id,date,device,build,format,corpus_id,state,entry,exit,T_total,T_launch,T_shelf,T_prep,T_parse,T_layout,T_render,T_restore,re_extracted,inode_before,inode_after,files_before,files_after,bytes_after,pss_peak_mb,valid,invalid_reason
+bench_epub_s-L2-1,2026-10-09,PLA-AL10,PLA-AL10 7.0.0.109(SP6C00E105R7P3),epub,bench_epub_s.epub,L2,shelf,kill,351,519,,,,,,1,none,915468,0,67,3658,,1,warmup;
+bench_epub_s-L2-2,2026-10-09,PLA-AL10,PLA-AL10 7.0.0.109(SP6C00E105R7P3),epub,bench_epub_s.epub,L2,shelf,kill,347,526,,,,,,1,none,1388029,0,67,3658,,1,warmup;
+bench_epub_s-L2-3,2026-10-09,PLA-AL10,PLA-AL10 7.0.0.109(SP6C00E105R7P3),epub,bench_epub_s.epub,L2,shelf,kill,353,531,,,,,,1,none,1392597,0,67,3658,,1,

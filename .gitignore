@@ -1,0 +1,59 @@
+# DevEco Studio / HarmonyOS
+.idea/
+*.iml
+*.hsp
+*.hbc
+*.app
+local.properties
+build/
+*.build/
+*.hvigor/
+node_modules/
+oh_modules/
+*.har
+defaults/
+signature/
+release/
+*.p12
+*.csr
+*.cer
+*.p7b
+
+# Local signing material & per-developer signing config (SEC-001)
+# 不提交签名密码/私钥密码/个人绝对路径；开发者本地签名材料放此处并按需引用
+signing/
+signing-config.json5
+local.signing.json5
+*.local.json5
+
+# DevEco Code generated files
+entry/build/
+entry/.cxx/
+entry/oh_modules/
+entry/*.so
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# EPUB test files (large binary test resources)
+*.epub
+test_epubs/
+
+# Test reports
+reports/
+
+# EPUBCheck 输出（可随时重跑生成）
+tests/epub/results/
+
+# 构建期生成（ENG-012）：hvigorfile.ts 按 buildMode 每次构建重新生成
+entry/src/main/ets/BuildProfile.ets
+*/BuildProfile.ets
+
+# Logs
+*.log
+hilog/
+references/
+spec/

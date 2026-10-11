@@ -1,0 +1,9 @@
+{
+  "name": "ohrengine-gl",
+  "version": "1.0.0",
+  "description": "OhEngine GLES page-curl flip engine (120fps GPU rendering)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common"
+  }
+}

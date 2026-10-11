@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_txt_exclusive",
+    "type": "har",
+    "description": "OhEngine TXT format exclusive features",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

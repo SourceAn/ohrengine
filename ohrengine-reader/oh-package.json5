@@ -1,0 +1,16 @@
+{
+  "name": "ohrengine-reader",
+  "version": "1.0.0",
+  "description": "OhEngine reusable reader host (EPUB/TXT, one-hand menu, mature page-turn animations)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common",
+    "ohrengine-ui-render": "file:../ohrengine-ui-render",
+    "ohrengine-feature": "file:../ohrengine-feature",
+    "ohrengine-epub": "file:../ohrengine-epub",
+    "ohrengine-txt-exclusive": "file:../ohrengine-txt-exclusive",
+    "libliquidglass.so": "file:./src/main/cpp/types/libliquidglass"
+  },
+  "devDependencies": {},
+  "dynamicDependencies": {}
+}

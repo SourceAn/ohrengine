@@ -1,0 +1,9 @@
+{
+  "name": "ohrengine-parsers",
+  "version": "1.0.0",
+  "description": "OhEngine format parsers (EPUB, HTML, CSS, TXT, CBZ)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common"
+  }
+}

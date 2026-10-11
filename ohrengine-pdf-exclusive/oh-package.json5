@@ -1,0 +1,9 @@
+{
+  "name": "ohrengine-pdf-exclusive",
+  "version": "1.0.0",
+  "description": "OhEngine PDF format exclusive features (stub — reserved for future)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common"
+  }
+}

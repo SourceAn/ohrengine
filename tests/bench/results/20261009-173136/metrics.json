@@ -1,0 +1,383 @@
+{
+  "runDir": "$HOME/Code/Harmony/Project/ohrengine/tests/bench/results/20261009-173136",
+  "generatedAt": "2026-10-09T09:35:41.125Z",
+  "runs": [
+    {
+      "file": "bench_cbz-cold.txt",
+      "id": "bench_cbz",
+      "scenario": "cold",
+      "lines": 5152,
+      "openMs": 0,
+      "restoreMs": 0,
+      "txtLazyIdxMs": 0,
+      "cacheTag": "open",
+      "cacheStats": "L3hits=0 L2hits=0 L2miss=3 liveLayout=0 hitRate=0% layoutMs=0 | L3 chapters=0 bytes~=0",
+      "anchorPage": 0,
+      "anchorReady": 2,
+      "totalPages": 3,
+      "firstFramePage": 1,
+      "bgQueued": 0,
+      "bgTotal": 3,
+      "t_anchor_ms": 2,
+      "t_firstFrame_ms": 4,
+      "t_bgStart_ms": 4,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "layoutWorkerMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 2,
+        "sessionOpen": 1,
+        "openMs": 1,
+        "cacheStats": 1,
+        "t_anchor": 1,
+        "openTotal": 1,
+        "t_firstFrame": 1,
+        "bgReflow": 1
+      }
+    },
+    {
+      "file": "bench_cbz-warm.txt",
+      "id": "bench_cbz",
+      "scenario": "warm",
+      "lines": 6700,
+      "openMs": 0,
+      "restoreMs": 0,
+      "txtLazyIdxMs": 0,
+      "cacheTag": "open",
+      "cacheStats": "L3hits=0 L2hits=0 L2miss=3 liveLayout=0 hitRate=0% layoutMs=0 | L3 chapters=0 bytes~=0",
+      "anchorPage": 0,
+      "anchorReady": 2,
+      "totalPages": 3,
+      "firstFramePage": 1,
+      "bgQueued": 0,
+      "bgTotal": 3,
+      "t_anchor_ms": 2,
+      "t_firstFrame_ms": 4,
+      "t_bgStart_ms": 4,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "layoutWorkerMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 2,
+        "sessionOpen": 1,
+        "openMs": 1,
+        "cacheStats": 1,
+        "t_anchor": 1,
+        "openTotal": 1,
+        "t_firstFrame": 1,
+        "bgReflow": 1
+      }
+    },
+    {
+      "file": "bench_pdf-cold.txt",
+      "id": "bench_pdf",
+      "scenario": "cold",
+      "lines": 4063,
+      "t_anchor_ms": null,
+      "t_firstFrame_ms": null,
+      "t_bgStart_ms": null,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "layoutWorkerMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 1
+      }
+    },
+    {
+      "file": "bench_pdf-warm.txt",
+      "id": "bench_pdf",
+      "scenario": "warm",
+      "lines": 4182,
+      "t_anchor_ms": null,
+      "t_firstFrame_ms": null,
+      "t_bgStart_ms": null,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "layoutWorkerMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 1
+      }
+    },
+    {
+      "file": "bench_txt_l-cold.txt",
+      "id": "bench_txt_l",
+      "scenario": "cold",
+      "lines": 4083,
+      "chapters": 241,
+      "vchs": 482,
+      "t_anchor_ms": null,
+      "t_firstFrame_ms": null,
+      "t_bgStart_ms": null,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "layoutWorkerMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 1,
+        "sessionOpen": 1,
+        "txtLazyOpen": 1
+      }
+    },
+    {
+      "file": "bench_txt_l-warm.txt",
+      "id": "bench_txt_l",
+      "scenario": "warm",
+      "lines": 4807,
+      "chapters": 241,
+      "vchs": 482,
+      "openMs": 0,
+      "restoreMs": 0,
+      "txtLazyIdxMs": 2,
+      "cacheTag": "open",
+      "cacheStats": "L3hits=0 L2hits=3 L2miss=0 liveLayout=0 hitRate=100% layoutMs=0 | L3 chapters=3 bytes~=57393",
+      "anchorPage": 0,
+      "anchorReady": 3,
+      "totalPages": 6258,
+      "firstFramePage": 1,
+      "bgQueued": 32,
+      "bgTotal": 482,
+      "t_anchor_ms": 69,
+      "t_firstFrame_ms": 74,
+      "t_bgStart_ms": 74,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 18,
+        "p50": 558,
+        "p95": 855,
+        "max": 855
+      },
+      "layoutWorkerMs": {
+        "n": 18,
+        "p50": 511,
+        "p95": 713,
+        "max": 713
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 2,
+        "sessionOpen": 1,
+        "txtLazyOpen": 1,
+        "openMs": 1,
+        "cacheStats": 1,
+        "t_anchor": 1,
+        "openTotal": 1,
+        "t_firstFrame": 1,
+        "bgReflow": 1,
+        "layoutWorker": 18,
+        "bgChapter": 18
+      }
+    },
+    {
+      "file": "bench_txt_xl-cold.txt",
+      "id": "bench_txt_xl",
+      "scenario": "cold",
+      "lines": 13170,
+      "t_anchor_ms": null,
+      "t_firstFrame_ms": null,
+      "t_bgStart_ms": null,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "layoutWorkerMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 1,
+        "sessionOpen": 1
+      }
+    },
+    {
+      "file": "bench_txt_xl-warm.txt",
+      "id": "bench_txt_xl",
+      "scenario": "warm",
+      "lines": 11200,
+      "t_anchor_ms": null,
+      "t_firstFrame_ms": null,
+      "t_bgStart_ms": null,
+      "t_bgEnd_ms": null,
+      "layoutChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "bgChapterMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "layoutWorkerMs": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "flip": {
+        "n": 0,
+        "avgMsP50": null,
+        "avgMsP95": null,
+        "maxMsMax": null
+      },
+      "blocks": 0,
+      "crashes": 0,
+      "counters": {
+        "sessionInit": 1,
+        "sessionOpen": 1
+      }
+    }
+  ]
+}

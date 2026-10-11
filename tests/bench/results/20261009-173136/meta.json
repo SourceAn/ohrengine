@@ -1,0 +1,11 @@
+{
+  "stamp": "20261009-173136",
+  "device": "3EV0225122002756",
+  "model": "PLA-AL10",
+  "kind": "真机",
+  "api": "26",
+  "softwareVersion": "PLA-AL10 7.0.0.109(SP6C00E105R7P3)",
+  "bundle": "com.example.ohrengine",
+  "scenarios": "cold,warm",
+  "waitSec": 12
+}

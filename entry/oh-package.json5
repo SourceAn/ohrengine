@@ -1,0 +1,17 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "OhEngine test app",
+  "main": "",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common",
+    "ohrengine-feature": "file:../ohrengine-feature",
+    "ohrengine-parsers": "file:../ohrengine-parsers",
+    "ohrengine-ui-render": "file:../ohrengine-ui-render",
+    "ohrengine-txt-exclusive": "file:../ohrengine-txt-exclusive",
+    "ohrengine-cbz-exclusive": "file:../ohrengine-cbz-exclusive",
+    "ohrengine-epub": "file:../ohrengine-epub",
+    "ohrengine-pdf-exclusive": "file:../ohrengine-pdf-exclusive",
+    "ohrengine-reader": "file:../ohrengine-reader"
+  }
+}

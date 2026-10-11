@@ -1,0 +1,9 @@
+{
+  "name": "ohrengine-feature",
+  "version": "1.0.0",
+  "description": "OhEngine reader feature module (dictionary, vocabulary, annotation, bookmark, theme, selection, history, search)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common"
+  }
+}

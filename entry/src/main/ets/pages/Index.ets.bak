@@ -1,0 +1,1738 @@
+import { OhEngine } from 'ohrengine-ui-render';
+import { Margins, TurnDirection } from 'ohrengine-common';
+import { resourceManager } from '@kit.LocalizationKit';
+import { fileIo } from '@kit.CoreFileKit';
+import type { LineBox } from 'ohrengine-common';
+import { window, display, UIContext, curves } from '@kit.ArkUI';
+import { ThemePreferenceStorage, Theme, PRESET_THEMES, SelectionRange, ContextMenuManager, AnnotationExporter, BookmarkStorage, Bookmark } from 'ohrengine-feature';
+import { TocItem, Annotation, AnnotationType, Locator, ParseCacheManager, SecureArchive, FontRegistrar, FontTheme } from 'ohrengine-common';
+import { WordLookupDialog } from './WordLookupDialog.ets';
+import { setVocabularyPageEngine } from './VocabularyListPage.ets';
+import { removeDirRecursive } from '../utils/FileUtils.ets';
+import { PageRenderer, ReaderViewport } from '../reader/PageRenderer.ets';
+import { ReaderGestureController } from '../reader/ReaderGestureController.ets';
+import { FlipPageController } from '../reader/FlipPageController.ets';
+import { SlideTurnController } from '../reader/SlideTurnController.ets';
+import { SelectionContextMenu } from '../panels/SelectionContextMenu.ets';
+import { ReaderTopBar } from '../panels/ReaderTopBar.ets';
+import { ReaderControlPanel, MenuBarMode } from '../panels/ReaderControlPanel.ets';
+import { ReaderSettingsPanel } from '../panels/ReaderSettingsPanel.ets';
+import { AutoTurnBar } from '../panels/AutoTurnBar.ets';
+import { ReaderStatusBar } from '../panels/ReaderStatusBar.ets';
+import { TocPanel } from '../panels/TocPanel.ets';
+import { MaterialConfig } from '../common/MaterialConfig.ets';
+import type { SeekInfo } from '../panels/ReaderScrubBar.ets';
+import { ApiConfigPanel } from '../panels/ApiConfigPanel.ets';
+import { AnnotationPanel } from '../panels/AnnotationPanel.ets';
+import { ReaderSettings, ReaderTurnMode, ReaderPageNumberMode, ReaderTextAlign, FONT_SIZE_LEVELS, LINE_SPACING_LEVELS } from '../utils/ReaderSettings.ets';
+import { formatClock, readSoc, readCharging } from '../utils/ReaderStatus.ets';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { BusinessError, commonEventManager } from '@kit.BasicServicesKit';
+
+const INDEX_TAG: string = 'OhEngine-Index';
+
+@Entry
+@Component
+struct Index {
+  @State engineState: string = '初始化中...';
+  @State pageLines: LineBox[] = [];
+  @State errorMsg: string = '';
+  @State currentPageNum: number = 1;
+  @State totalPages: number = 1;
+  @State chapterCurrentPage: number = 1;
+  @State chapterTotalPages: number = 1;
+  @State showControls: boolean = false;
+  @State showSettings: boolean = false;
+  @State showAutoTurnBar: boolean = false;
+  @State autoTurning: boolean = false;
+  @State autoSpeed: number = 1.0;
+  private engine: OhEngine = new OhEngine();
+  private screenDensity: number = 3.0;
+  @State margins: Margins = { left: 10, right: 10, top: 50, bottom: 36 } as Margins;
+  @State selection: SelectionRange | null = null;
+  @State annotations: Annotation[] = [];
+  @State bookmarks: Bookmark[] = [];
+  @State showAnnotationPanel: boolean = false;
+  @State showToc: boolean = false;
+  /** 当前主题 id（主题切换实时同步，驱动深色/明亮按钮即时刷新） */
+  @State currentThemeId: string = 'day';
+  /** 底部菜单栏模式（调用引擎时通过路由参数选择，不提供应用内切换） */
+  private barMode: MenuBarMode = MenuBarMode.DEBUG;
+  /** 下拉添加书签：当前内容下移位移（vp） */
+  @State @Watch('onPullDistanceChanged') pullDistance: number = 0;
+  /** 下拉添加书签：书签填充进度 0~1 */
+  @State pullProgress: number = 0;
+  /** 下拉添加书签触发距离（vp；与 ReaderGestureController.PULL_TRIGGER 一致） */
+  private static readonly PULL_TRIGGER: number = 80;
+  private bookmarkStorage: BookmarkStorage = new BookmarkStorage();
+  @State selectionMenuX: number = 0;
+  @State selectionMenuY: number = 0;
+  @State showTranslate: boolean = false;
+  @State showDictionary: boolean = false;
+  private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D();
+  @State contentWidth: number = 344;
+  @State contentHeight: number = 524;
+  @State canvasW: number = 360;
+  @State canvasH: number = 800;
+  @State avoidAreaBottom: number = 0;
+  @State avoidAreaTopVp: number = 0;
+  private lookupDialogController: CustomDialogController | null = null;
+  @State showApiConfig: boolean = false;
+  @State apiConfigName: string = '';
+  @State apiConfigEndpoint: string = '';
+  @State apiConfigMessage: string = '';
+  @State currentFontThemeId: string = this.engine.getFontThemeManager().currentTheme.id;
+  @State bookPath: string = '';
+  // ── 阅读器新设置 ──
+  @State turnMode: ReaderTurnMode = ReaderTurnMode.SIMULATION;
+  @State singleHand: boolean = false;
+  @State eyeTracking: boolean = false;
+  @State pageNumberMode: ReaderPageNumberMode = ReaderPageNumberMode.TOTAL;
+  @State textAlignMode: ReaderTextAlign = 'justify';
+  @State fontSizeLevel: number = 5;
+  @State lineSpacingLevel: number = 3;
+  // ── 状态条 ──
+  @State timeText: string = '--:--';
+  @State batteryCharging: boolean = false;
+  @State batterySoc: number = -1;
+  // 电池状态事件订阅（实时电量图标）
+  private batterySubscriber: commonEventManager.CommonEventSubscriber | null = null;
+  // 窗口监听生命周期（ENG-001）：保存 window 引用与回调，aboutToDisappear 成对注销
+  private mainWindow: window.Window | null = null;
+  private onWindowSizeChangeCb: (size: window.Size) => void = (size: window.Size): void => {
+    if (this.pageDestroyed) {
+      return;
+    }
+    const ml2: number = this.margins.left;
+    const mr2: number = this.margins.right;
+    const mt2: number = this.margins.top;
+    const mb2: number = this.margins.bottom;
+    const avoidH2: number = this.avoidAreaTopVp + this.avoidAreaBottom;
+    if (this.flipController.isActive()) {
+      this.flipController.cancel();
+    }
+    const newOrientation: 'landscape' | 'portrait' = size.width > size.height ? 'landscape' : 'portrait';
+    this.engine.mediaContext.orientation = newOrientation;
+    this.engine.mediaContext.viewWidth = Math.round(size.width / this.screenDensity) - ml2 - mr2;
+    this.engine.mediaContext.viewHeight = Math.round(size.height / this.screenDensity) - mt2 - mb2 - avoidH2;
+    this.engine.recompileCss();
+    this.refreshPage();
+  };
+  // 页面销毁标记
+  private pageDestroyed: boolean = false;
+  // 定时器
+  private statusTimer: number = -1;
+  private autoTurnTimer: number = -1;
+  private pageRenderer: PageRenderer = new PageRenderer({
+    engine: this.engine,
+    canvasCtx: this.canvasCtx,
+    getViewport: () => this.getReaderViewport(),
+    getAnnotations: () => this.annotations,
+    getSelection: () => this.selection,
+    getPullDistance: () => this.pullDistance,
+    getPullProgress: () => this.pullProgress,
+    onContentChanged: () => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      if (this.flipController.isActive()) {
+        return;
+      }
+      this.pageRenderer.renderPage();
+    },
+    isFlipActive: () => this.flipController.isActive()
+  });
+  // 仿真翻页控制器
+  private flipController: FlipPageController = new FlipPageController({
+    engine: this.engine,
+    pageRenderer: this.pageRenderer,
+    canvasCtx: this.canvasCtx,
+    getViewport: () => this.getReaderViewport(),
+    onPageTurned: (direction: TurnDirection) => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      const ok: boolean = this.engine.turnPage(direction);
+      if (ok) {
+        this.refreshPage();
+      } else {
+        this.pageRenderer.renderPage();
+      }
+    },
+    onFlipStateChange: (active: boolean) => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      if (active) {
+        this.hideControls();
+        this.selection = null;
+      }
+    }
+  });
+  // 横滑/上下滑动补间翻页控制器（HORIZONTAL/VERTICAL 模式）
+  private slideController: SlideTurnController = new SlideTurnController({
+    engine: this.engine,
+    pageRenderer: this.pageRenderer,
+    canvasCtx: this.canvasCtx,
+    getViewport: () => this.getReaderViewport(),
+    onPageTurned: (direction: TurnDirection) => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      const ok: boolean = this.engine.turnPage(direction);
+      if (ok) {
+        this.refreshPage();
+      } else {
+        this.pageRenderer.renderPage();
+      }
+    },
+    onFlipStateChange: (active: boolean) => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      if (active) {
+        this.hideControls();
+        this.selection = null;
+      }
+    }
+  });
+  private gestureController: ReaderGestureController = new ReaderGestureController({
+    getSelection: () => this.selection,
+    setSelection: (s: SelectionRange | null) => {
+      if (s !== null) {
+        // 拖动扩选后重算选中文本（handleTouchMove 只更新起止偏移与行索引）
+        s.text = this.computeSelectionText(s);
+        this.selection = s;
+        this.updateSelectionMenu();
+      } else {
+        this.selection = null;
+      }
+    },
+    getPageLines: () => this.pageLines,
+    getContentWidth: () => this.contentWidth,
+    getContentHeight: () => this.contentHeight,
+    getMargins: () => this.margins,
+    onRenderPage: () => this.pageRenderer.renderPage(),
+    onHideControls: () => this.hideControls(),
+    onToggleControls: () => {
+      this.showControls = !this.showControls;
+      this.showSettings = false;
+    },
+    getTurnMode: () => this.turnMode,
+    getSingleHand: () => this.singleHand,
+    isAutoTurning: () => this.autoTurning,
+    onAutoTurnTap: () => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      this.onAutoTurnTap();
+    },
+    onQuickTurn: (direction: TurnDirection) => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      const ok: boolean = this.engine.turnPage(direction);
+      if (ok) {
+        this.refreshPage();
+      } else {
+        this.pageRenderer.renderPage();
+      }
+    },
+    getSlideTurn: () => this.slideController,
+    flip: this.flipController,
+    onBookmarkPullMove: (dy: number) => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      this.pullProgress = Math.min(1, Math.max(0, dy) / Index.PULL_TRIGGER);
+      this.pullDistance = Math.max(0, dy);
+    },
+    onBookmarkPullEnd: (add: boolean) => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      hilog.info(0x0000, INDEX_TAG, 'bookmarkPullEnd add=%{public}d pullDis=%{public}d',
+        add ? 1 : 0, Math.round(this.pullDistance));
+      if (add) {
+        this.toggleBookmarkAtCurrentPage();
+      }
+      // 弹簧回弹：物理阻尼逐帧驱动画布重绘（@Watch onPullDistanceChanged）
+      this.getUIContext().animateTo({
+        duration: 360,
+        curve: curves.springMotion(0.45, 0.88, 0)
+      }, () => {
+        this.pullProgress = 0;
+        this.pullDistance = 0;
+      });
+    }
+  });
+
+  aboutToAppear(): void {
+    this.pageDestroyed = false;
+    const registrar: FontRegistrar = {
+      registerFont: (familyName: string, familySrc: string): void => {
+        try {
+          this.getUIContext().getFont().registerFont({
+            familyName: familyName,
+            familySrc: familySrc
+          });
+        } catch (e) {
+        }
+      }
+    };
+    this.engine.setFontRegistrar(registrar);
+    const params: Record<string, Object> | undefined =
+      this.getUIContext().getRouter().getParams() as Record<string, Object>;
+    if (params !== undefined) {
+      const bp: Object | undefined = params['bookPath'];
+      if (bp !== undefined && typeof bp === 'string') {
+        this.bookPath = bp;
+      }
+      // 底部菜单栏模式可在调用阅读引擎时通过路由参数选择：
+      // 传 barMode='test' 进入测试模式（第4格为单手开关），否则默认调试模式
+      const bm: Object | undefined = params['barMode'];
+      this.barMode = bm !== undefined && String(bm) === 'test' ? MenuBarMode.TEST : MenuBarMode.DEBUG;
+    }
+    this.currentThemeId = this.engine.getThemeManager().currentTheme.id;
+    this.initEngine();
+    this.startStatusTimer();
+    this.startBatteryMonitor();
+  }
+
+  aboutToDisappear(): void {
+    this.pageDestroyed = true;
+    this.stopAutoTurn();
+    this.stopBatteryMonitor();
+    if (this.statusTimer > 0) {
+      clearInterval(this.statusTimer);
+      this.statusTimer = -1;
+    }
+    if (this.mainWindow !== null) {
+      try {
+        this.mainWindow.off('windowSizeChange', this.onWindowSizeChangeCb);
+      } catch (e) {
+      }
+      this.mainWindow = null;
+    }
+    this.pageRenderer.dispose();
+    this.flipController.dispose();
+    this.slideController.dispose();
+  }
+
+  /** 恢复阅读器设置并应用（字号/行距/对齐/翻页方式/页码显示） */
+  private async restoreSettings(): Promise<void> {
+    const hostCtx: Context | undefined = this.getUIContext().getHostContext();
+    if (hostCtx === undefined) {
+      return;
+    }
+    const settings: ReaderSettings = new ReaderSettings();
+    const loaded = await settings.load(hostCtx);
+    if (this.pageDestroyed) {
+      return;
+    }
+    this.turnMode = loaded.turnMode;
+    this.singleHand = loaded.singleHand;
+    this.eyeTracking = loaded.eyeTracking;
+    this.pageNumberMode = loaded.pageNumberMode;
+    this.autoSpeed = loaded.autoSpeed;
+    this.textAlignMode = loaded.textAlign;
+    this.fontSizeLevel = loaded.fontSizeLevel;
+    this.lineSpacingLevel = loaded.lineSpacingLevel;
+    this.applyFontSizeLevel(loaded.fontSizeLevel, false);
+    this.applyLineSpacingLevel(loaded.lineSpacingLevel, false);
+    this.applyTextAlign(loaded.textAlign, false);
+  }
+
+  private async persistSettings(): Promise<void> {
+    const hostCtx: Context | undefined = this.getUIContext().getHostContext();
+    if (hostCtx === undefined) {
+      return;
+    }
+    const settings: ReaderSettings = new ReaderSettings();
+    await settings.save(hostCtx, {
+      turnMode: this.turnMode,
+      singleHand: this.singleHand,
+      eyeTracking: this.eyeTracking,
+      pageNumberMode: this.pageNumberMode,
+      autoSpeed: this.autoSpeed,
+      textAlign: this.textAlignMode,
+      fontSizeLevel: this.fontSizeLevel,
+      lineSpacingLevel: this.lineSpacingLevel
+    });
+  }
+
+  private async initEngine(): Promise<void> {
+    if (this.pageDestroyed) {
+      return;
+    }
+    const hostCtx: Context | undefined = this.getUIContext().getHostContext();
+    if (hostCtx === undefined) {
+      this.errorMsg = '获取应用上下文失败';
+      this.engineState = '错误';
+      return;
+    }
+    const ctx: Context = hostCtx;
+    let mainWindow: window.Window;
+    let sysAvoid: window.AvoidArea;
+    let navAvoid: window.AvoidArea;
+    let winRect: window.Rect;
+    let density: number;
+    try {
+      mainWindow = await window.getLastWindow(ctx);
+      if (this.pageDestroyed) {
+        return;
+      }
+      sysAvoid = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+      navAvoid = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+      winRect = mainWindow.getWindowProperties().windowRect;
+      const defaultDisplay = display.getDefaultDisplaySync();
+      density = defaultDisplay.densityPixels;
+    } catch (e) {
+      this.errorMsg = '获取窗口/显示信息失败: ' + (e instanceof Error ? e.message : String(e));
+      this.engineState = '错误';
+      return;
+    }
+    const avoidAreaTop: number = sysAvoid.topRect.height;
+    const avoidAreaBottom: number = sysAvoid.bottomRect.height + navAvoid.bottomRect.height;
+    this.screenDensity = density;
+    this.pageRenderer.setScreenDensity(density);
+    const viewWidthVp: number = Math.round(winRect.width / density);
+    const rawH: number = Math.round((winRect.height - avoidAreaTop - avoidAreaBottom) / density);
+    const defaultMargins = this.engine.getMargins();
+    this.margins = { left: defaultMargins.left, right: defaultMargins.right, top: defaultMargins.top, bottom: defaultMargins.bottom } as Margins;
+    const contentW: number = viewWidthVp - this.margins.left - this.margins.right;
+    const contentH: number = rawH - this.margins.top - this.margins.bottom;
+    this.engine.configure({
+      viewWidth: contentW, viewHeight: contentH, density: density
+    });
+    this.mainWindow = mainWindow;
+    mainWindow.on('windowSizeChange', this.onWindowSizeChangeCb);
+    this.contentWidth = contentW;
+    this.contentHeight = contentH;
+    this.canvasW = viewWidthVp;
+    this.canvasH = Math.round(winRect.height / density);
+    this.avoidAreaBottom = Math.round((sysAvoid.bottomRect.height + navAvoid.bottomRect.height) / density);
+    this.avoidAreaTopVp = Math.round(sysAvoid.topRect.height / density);
+    try {
+      const booksDir: string = ctx.filesDir + '/books';
+      const cacheDir: string = ctx.filesDir + '/cache/books';
+      try { fileIo.mkdirSync(booksDir, true); } catch (_e) { }
+      try { fileIo.mkdirSync(cacheDir, true); } catch (_e) { }
+
+      let sourcePath: string = '';
+      let bookBasePath: string = '';
+      if (this.bookPath.length > 0) {
+        const lowerPath: string = this.bookPath.toLowerCase();
+        if (lowerPath.endsWith('.txt')) {
+          this.engineState = '打开TXT文件...';
+          bookBasePath = this.bookPath;
+          this.pageRenderer.setBookBasePath(bookBasePath);
+          sourcePath = this.bookPath;
+        } else if (lowerPath.endsWith('.pdf')) {
+          // PDF 直开（阅读引擎：文本层提取为可重排内容）
+          this.engineState = '打开PDF文件...';
+          bookBasePath = this.bookPath;
+          this.pageRenderer.setBookBasePath(bookBasePath);
+          sourcePath = this.bookPath;
+        } else {
+          this.engineState = '打开外部文件...';
+          const bookFileName: string = this.bookPath.substring(this.bookPath.lastIndexOf('/') + 1);
+          const archivePath: string = booksDir + '/' + bookFileName;
+          let needCopy: boolean = true;
+          try {
+            const s1: fileIo.Stat = fileIo.statSync(archivePath);
+            const s2: fileIo.Stat = fileIo.statSync(this.bookPath);
+            needCopy = s1.size !== s2.size;
+          } catch (_e) {
+            needCopy = true;
+          }
+          if (needCopy) {
+            fileIo.copyFileSync(this.bookPath, archivePath);
+          }
+          const extractDir: string = booksDir + '/' + bookFileName + '_extracted';
+          const cacheHit: boolean = lowerPath.endsWith('.epub') &&
+            ParseCacheManager.isFingerprintValid(extractDir, archivePath);
+          if (cacheHit) {
+            this.engineState = '缓存命中，跳过解压...';
+          } else {
+            removeDirRecursive(extractDir);
+            fileIo.mkdirSync(extractDir, true);
+            try {
+              await SecureArchive.decompressArchive(archivePath, extractDir, ctx.filesDir);
+            } catch (e) {
+              this.errorMsg = '解压外部文件失败：' + (e instanceof Error ? e.message : String(e));
+              return;
+            }
+            ParseCacheManager.writeFingerprint(extractDir, archivePath);
+          }
+          bookBasePath = extractDir;
+          this.pageRenderer.setBookBasePath(bookBasePath);
+          if (lowerPath.endsWith('.epub')) {
+            sourcePath = archivePath;
+          }
+        }
+      } else {
+        this.engineState = '复制EPUB文件...';
+        const rawfileData: Uint8Array = await ctx.resourceManager.getRawFileContent('test.epub');
+        const sandboxPath: string = booksDir + '/test.epub';
+        let needWrite: boolean = true;
+        try {
+          const existing: fileIo.Stat = fileIo.statSync(sandboxPath);
+          needWrite = existing.size !== rawfileData.byteLength;
+        } catch (_e) {
+          needWrite = true;
+        }
+        if (needWrite) {
+          this.engineState = '清理旧文件...';
+          try { fileIo.unlinkSync(sandboxPath); } catch (_e) { }
+          const file: fileIo.File = fileIo.openSync(sandboxPath,
+            fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.TRUNC);
+          fileIo.writeSync(file.fd, rawfileData.buffer.slice(0, rawfileData.byteLength));
+          fileIo.closeSync(file);
+        }
+
+        this.engineState = '解压EPUB...';
+        const extractDir: string = booksDir + '/test_epub_extracted';
+        const cacheHit: boolean = ParseCacheManager.isFingerprintValid(extractDir, sandboxPath);
+        if (cacheHit) {
+          this.engineState = '缓存命中，跳过解压...';
+        } else {
+          removeDirRecursive(extractDir);
+          fileIo.mkdirSync(extractDir, true);
+          try {
+            await SecureArchive.decompressArchive(sandboxPath, extractDir, ctx.filesDir);
+          } catch (e) {
+            this.errorMsg = '解压失败：' + (e instanceof Error ? e.message : String(e));
+            return;
+          }
+          ParseCacheManager.writeFingerprint(extractDir, sandboxPath);
+        }
+        bookBasePath = extractDir;
+        this.pageRenderer.setBookBasePath(bookBasePath);
+        sourcePath = sandboxPath;
+      }
+
+      this.engineState = '打开书籍...';
+      const bookName: string = (sourcePath.length > 0 ? sourcePath : bookBasePath)
+        .substring((sourcePath.length > 0 ? sourcePath : bookBasePath).lastIndexOf('/') + 1);
+      const pageCacheDir: string = cacheDir + '/' + bookName;
+      try { fileIo.mkdirSync(pageCacheDir, true); } catch (_e) { }
+      const pub = await this.engine.open(bookBasePath,
+        (sourcePath.length > 0 || pageCacheDir.length > 0)
+          ? { sourcePath: sourcePath.length > 0 ? sourcePath : undefined, cacheDir: pageCacheDir }
+          : undefined);
+      this.engineState = '已加载: ' + (pub !== undefined ? pub.getMetadata().title : '未知标题');
+      this.engine.initDictionaryConfigManager(ctx.filesDir);
+
+      const page = this.engine.getCurrentPage();
+      if (page !== undefined) {
+        this.pageLines = page.lines;
+      } else {
+        this.pageLines = [];
+      }
+      this.currentPageNum = this.engine.getGlobalPageNumber();
+      this.totalPages = this.engine.getTotalPages();
+      this.updateChapterPageInfo();
+      this.pageRenderer.renderPage();
+      await this.engine.getAnnotationStorage().init(ctx);
+      // 加载书签
+      this.bookmarkStorage = new BookmarkStorage();
+      await this.bookmarkStorage.init(ctx);
+      const pub2 = this.engine.getPublication();
+      if (pub2 !== undefined) {
+        const bookId: string = pub2.getMetadata().title;
+        this.annotations = await this.engine.getAnnotationStorage().getAll(bookId);
+        this.bookmarks = await this.bookmarkStorage.getAll(bookId);
+        this.engine.syncAnnotations(this.annotations);
+      }
+      // 注册主题变化监听 → 重绘
+      this.engine.getThemeManager().onThemeChange((t: Theme) => {
+        if (this.pageDestroyed) {
+          return;
+        }
+        this.currentThemeId = t.id;
+        this.engine.mediaContext.colorScheme = t.id === 'night' ? 'dark' : 'light';
+        try {
+          // 仅重编译主题颜色并重绘当前页，不触发重新排版/重分页
+          this.engine.applyThemeCss();
+          this.refreshPage();
+        } catch (e) {
+        }
+        this.syncSystemBarContentColor(t.id);
+      });
+      // 恢复主题
+      const savedTheme: string = await new ThemePreferenceStorage().load(ctx);
+      if (this.pageDestroyed) {
+        return;
+      }
+      this.engine.getThemeManager().switchTheme(savedTheme);
+      // 字号变化刷新页码
+      this.engine.paramBus.onChange('fontSize', () => {
+        if (this.pageDestroyed) {
+          return;
+        }
+        this.currentPageNum = this.engine.getGlobalPageNumber();
+        this.totalPages = this.engine.getTotalPages();
+        this.updateChapterPageInfo();
+      });
+      this.engine.paramBus.onChange('pageReady', () => {
+        if (this.pageDestroyed) {
+          return;
+        }
+        this.refreshPage();
+      });
+      // 引擎就绪后应用已保存的阅读设置（字号/行距/对齐/翻页方式等）
+      await this.restoreSettings();
+    } catch (e) {
+      this.errorMsg = '引擎初始化失败: ' + (e instanceof Error ? e.message : JSON.stringify(e));
+      this.engineState = '错误';
+    }
+  }
+
+  private syncSystemBarContentColor(themeId: string): void {
+    const contentColor: string = themeId === 'night' ? '#FFFFFF' : '#000000';
+    const hostCtx: Context | undefined = this.getUIContext().getHostContext();
+    if (hostCtx === undefined) {
+      return;
+    }
+    window.getLastWindow(hostCtx).then((mainWindow: window.Window) => {
+      mainWindow.setWindowSystemBarProperties({
+        statusBarContentColor: contentColor,
+        navigationBarContentColor: contentColor
+      } as window.SystemBarProperties);
+    }).catch((e: Error) => {
+    });
+  }
+
+  build() {
+    Stack() {
+      // ===== 内容层（Canvas） =====
+      if (this.errorMsg.length > 0) {
+        Text(this.engineState).fontSize(14).fontColor('#ff4444')
+        Text(this.errorMsg).fontSize(12).fontColor('#ff4444').margin({ top: 8 })
+      } else {
+        Canvas(this.canvasCtx)
+          .width(this.canvasW)
+          .height(this.canvasH)
+          .onReady(() => {
+            this.pageRenderer.renderPage();
+          })
+          .onTouch((event: TouchEvent) => {
+            this.gestureController.handleTouch(event);
+          })
+          .position({ x: 0, y: 0 })
+      }
+
+      // ===== 常驻状态条（时间/电量/页数） =====
+      if (this.errorMsg.length === 0) {
+        ReaderStatusBar({
+          timeText: this.timeText,
+          batteryCharging: this.batteryCharging,
+          batterySoc: this.batterySoc,
+          pageRightText: this.pageNumberText(),
+          margins: this.margins,
+          avoidAreaBottom: this.avoidAreaBottom,
+          contentWidth: this.contentWidth,
+          canvasH: this.canvasH
+        })
+      }
+
+      // ===== 长按选词弹窗 =====
+      if (this.selection !== null) {
+        SelectionContextMenu({
+          selection: this.selection,
+          showTranslate: this.showTranslate,
+          showDictionary: this.showDictionary,
+          anchorX: this.selectionMenuX,
+          anchorY: this.selectionMenuY,
+          margins: this.margins,
+          canvasW: this.canvasW,
+          canvasH: this.canvasH,
+          onCopy: (text: string) => {
+            ContextMenuManager.copyToClipboard(text);
+            this.clearSelection();
+          },
+          onNote: (text: string) => {
+            this.addAnnotationFromSelection(AnnotationType.NOTE, text);
+          },
+          onUnderline: () => {
+            this.addAnnotationFromSelection(AnnotationType.UNDERLINE);
+          },
+          onTranslate: (text: string) => {
+            this.showPlaceholderToast('翻译（占位）：' + text);
+            this.clearSelection();
+          },
+          onDictionary: (text: string) => {
+            this.selection = null;
+            this.pageRenderer.renderPage();
+            this.lookupDialogController = new CustomDialogController({
+              builder: WordLookupDialog({
+                word: text,
+                sentence: '',
+                engine: this.engine
+              }),
+              autoCancel: true,
+              systemMaterial: MaterialConfig.sheetMaterial()
+            });
+            this.lookupDialogController.open();
+          },
+          onShare: (text: string) => {
+            const uiContext: UIContext = this.getUIContext();
+            ContextMenuManager.shareText(text, uiContext);
+            this.clearSelection();
+          },
+          onHighlight: () => {
+            this.addAnnotationFromSelection(AnnotationType.HIGHLIGHT);
+          }
+        })
+      }
+
+      // ===== 顶部控制栏（返回 + 目录），目录卡弹出时随菜单栏动画关闭 =====
+      if (this.showControls && !this.showToc) {
+        ReaderTopBar({
+          isDark: this.currentThemeId === 'night',
+          margins: this.margins,
+          avoidAreaTopVp: this.avoidAreaTopVp,
+          contentWidth: this.contentWidth,
+          onBack: () => {
+            this.getUIContext().getRouter().back();
+          },
+          onToggleToc: () => {
+            this.showToc = !this.showToc;
+          },
+          onTapOutside: () => {
+            this.hideControls();
+          }
+        })
+      }
+
+      // ===== 底部控制面板（纯悬浮胶囊式）=====
+      if (this.showControls && !this.showToc) {
+        ReaderControlPanel({
+          progress: this.currentProgress(),
+          fontSizeLevel: this.fontSizeLevel,
+          lineSpacingLevel: this.lineSpacingLevel,
+          textAlign: this.textAlignMode,
+          turnMode: this.turnMode,
+          singleHand: this.singleHand,
+          currentFontFamily: this.engine.getFontThemeManager().currentTheme.cjkFontFamily ?? '',
+          themes: PRESET_THEMES,
+          currentThemeId: $currentThemeId,
+          barMode: this.barMode,
+          margins: this.margins,
+          avoidAreaBottom: this.avoidAreaBottom,
+          contentWidth: this.contentWidth,
+          canvasH: this.canvasH,
+          onProgressChange: (v: number) => {
+            this.goToProgress(v);
+          },
+          onQuerySeekInfo: (v: number): SeekInfo => {
+            return this.querySeekInfo(v);
+          },
+          onPrevPage: () => {
+            this.turnPageBy(TurnDirection.BACKWARD);
+          },
+          onNextPage: () => {
+            this.turnPageBy(TurnDirection.FORWARD);
+          },
+          onFontSizeLevelChange: (level: number) => {
+            this.applyFontSizeLevel(level, true);
+          },
+          onLineSpacingLevelChange: (level: number) => {
+            this.applyLineSpacingLevel(level, true);
+          },
+          onTextAlignChange: (align: ReaderTextAlign) => {
+            this.applyTextAlign(align, true);
+          },
+          onTurnModeChange: (mode: ReaderTurnMode) => {
+            this.turnMode = mode;
+            this.persistSettings();
+          },
+          onSelectFont: (family: string) => {
+            this.applyFontFamily(family);
+          },
+          onSelectTheme: (id: string) => {
+            this.engine.getThemeManager().switchTheme(id);
+            this.currentThemeId = id;
+            this.saveThemePreference(id);
+          },
+          onToggleTheme: () => {
+            try {
+              const curId: string = this.engine.getThemeManager().currentTheme.id;
+              const targetId: string = curId === 'night' ? 'day' : 'night';
+              this.engine.getThemeManager().switchTheme(targetId);
+              // 直接同步本地状态：无论主题监听回调时序如何，立即驱动菜单栏刷新
+              this.currentThemeId = targetId;
+              this.saveThemePreference(targetId);
+            } catch (e) {
+              // 主题切换失败不影响按钮状态与阅读器使用
+            }
+          },
+          onSingleHandChange: (v: boolean) => {
+            this.singleHand = v;
+            this.persistSettings();
+          },
+          onOpenSettings: () => {
+            // 设置作为遮罩层叠于底部菜单之上，不隐藏菜单
+            this.showSettings = true;
+          }
+        })
+      }
+
+      // ===== 阅读设置面板 =====
+      if (this.showSettings) {
+        ReaderSettingsPanel({
+          singleHand: this.singleHand,
+          autoSpeed: this.autoSpeed,
+          autoTurning: this.autoTurning,
+          pageNumberMode: this.pageNumberMode,
+          margins: this.margins,
+          avoidAreaBottom: this.avoidAreaBottom,
+          contentWidth: this.contentWidth,
+          canvasH: this.canvasH,
+          onSingleHandChange: (v: boolean) => {
+            this.singleHand = v;
+            this.persistSettings();
+          },
+          onAutoSpeedChange: (v: number) => {
+            this.autoSpeed = v;
+            this.persistSettings();
+            this.restartAutoTurnTimer();
+          },
+          onStartAutoTurn: () => {
+            hilog.info(0x0000, INDEX_TAG, 'onStartAutoTurn callback fired');
+            this.showSettings = false;
+            this.startAutoTurn();
+          },
+          onExitAutoTurn: () => {
+            hilog.info(0x0000, INDEX_TAG, 'onExitAutoTurn callback fired');
+            this.showSettings = false;
+            this.stopAutoTurn();
+          },
+          onPageNumberModeChange: (mode: ReaderPageNumberMode) => {
+            this.pageNumberMode = mode;
+            this.persistSettings();
+          },
+          onOpenVocabulary: () => {
+            this.showSettings = false;
+            setVocabularyPageEngine(this.engine);
+            this.getUIContext().getRouter().pushUrl({ url: 'pages/VocabularyListPage' });
+          },
+          onToggleAnnotationPanel: () => {
+            this.showSettings = false;
+            this.showAnnotationPanel = true;
+          },
+          onExportAnnotations: () => {
+            this.showSettings = false;
+            this.exportAnnotations('markdown');
+          },
+          onOpenApiConfig: () => {
+            this.showSettings = false;
+            this.showApiConfig = true;
+          },
+          onToggleListen: () => {
+            this.showPlaceholderToast('听书（占位）');
+          },
+          onClose: () => {
+            this.showSettings = false;
+          }
+        })
+        // 设置作为顶层遮罩：高于底部菜单(zIndex100)/顶部栏(zIndex106)等所有 UI
+        .zIndex(120)
+      }
+
+      // ===== 自动翻页控制栏 =====
+      if (this.showAutoTurnBar) {
+        AutoTurnBar({
+          autoSpeed: this.autoSpeed,
+          margins: this.margins,
+          avoidAreaBottom: this.avoidAreaBottom,
+          contentWidth: this.contentWidth,
+          canvasH: this.canvasH,
+          onAutoSpeedChange: (v: number) => {
+            this.autoSpeed = v;
+            this.persistSettings();
+            this.restartAutoTurnTimer();
+          },
+          onResume: () => {
+            // 关闭控制栏 = 继续自动翻页
+            this.showAutoTurnBar = false;
+            this.startAutoTurnTimer();
+          },
+          onExit: () => {
+            this.stopAutoTurn();
+          }
+        })
+      }
+
+      // ===== 目录 / 笔记弹窗 =====
+      if (this.showToc) {
+        TocPanel({
+          toc: this.engine.getTableOfContents(),
+          bookmarkChapters: this.bookmarkChapterSet(),
+          noteChapters: this.noteChapterSet(),
+          notes: this.annotations,
+          tocChapterIndices: this.tocChapterIndices(),
+          pageNumbers: this.tocPageNumbers(),
+          currentPageNum: this.currentPageNum,
+          bookTitle: this.currentBookTitle(),
+          coverPath: this.resolvedCoverPath(),
+          isCurrent: (item: TocItem) => this.isCurrentTocItem(item),
+          currentChapterIndex: this.engine.getCurrentChapterIndex(),
+          avoidAreaTopVp: this.avoidAreaTopVp,
+          avoidAreaBottom: this.avoidAreaBottom,
+          contentWidth: this.contentWidth,
+          canvasH: this.canvasH,
+          margins: this.margins,
+          onClose: () => {
+            this.showToc = false;
+          },
+          onSelect: (item: TocItem) => {
+            this.engine.goToTocItem(item);
+            this.refreshPage();
+            this.showToc = false;
+            this.hideControls();
+          },
+          onSelectAnnotation: (ann: Annotation) => {
+            this.engine.goToAnnotation(ann);
+            this.refreshPage();
+            this.showToc = false;
+            this.hideControls();
+          }
+        })
+      }
+
+      // ===== 在线词典 API 设置弹窗（独立居中卡片） =====
+      if (this.showApiConfig) {
+        ApiConfigPanel({
+          apiConfigName: this.apiConfigName,
+          apiConfigEndpoint: this.apiConfigEndpoint,
+          apiConfigMessage: this.apiConfigMessage,
+          onNameChange: (val: string) => { this.apiConfigName = val; },
+          onEndpointChange: (val: string) => { this.apiConfigEndpoint = val; },
+          onAdd: () => {
+            const endpoint: string = this.apiConfigEndpoint.trim();
+            const name: string = this.apiConfigName.trim();
+            if (name.length === 0) {
+              this.apiConfigMessage = '请填写 API 名称';
+              return;
+            }
+            if (endpoint.length === 0) {
+              this.apiConfigMessage = '请填写端点 URL';
+              return;
+            }
+            if (!endpoint.startsWith('https://')) {
+              this.apiConfigMessage = '端点必须是 https:// 开头的 URL';
+              return;
+            }
+            if (endpoint.indexOf('{word}') < 0) {
+              this.apiConfigMessage = '端点必须包含 {word} 占位符';
+              return;
+            }
+            this.engine.addCustomDictionary(name, endpoint);
+            this.apiConfigMessage = '已添加: ' + name;
+            this.apiConfigName = '';
+            this.apiConfigEndpoint = '';
+          },
+          onClose: () => {
+            this.showApiConfig = false;
+            this.apiConfigMessage = '';
+          }
+        })
+      }
+
+      // ===== 标注面板 =====
+      if (this.showAnnotationPanel) {
+        AnnotationPanel({
+          annotations: this.annotations,
+          onDelete: (ann: Annotation) => {
+            const pub3 = this.engine.getPublication();
+            if (pub3 === undefined) return;
+            const bookId2: string = pub3.getMetadata().title;
+            this.engine.getAnnotationStorage().remove(bookId2, ann.id);
+            const idx: number = this.annotations.indexOf(ann);
+            if (idx >= 0) {
+              this.annotations.splice(idx, 1);
+            }
+            this.engine.syncAnnotations(this.annotations);
+            this.pageRenderer.renderPage();
+          },
+          onExport: (format: string) => {
+            this.exportAnnotations(format);
+          },
+          onClose: () => {
+            this.showAnnotationPanel = false;
+          }
+        })
+      }
+    }.width('100%').height('100%')
+  }
+
+  // ==================== 状态条 / 章节页数 ====================
+
+  private startStatusTimer(): void {
+    if (this.statusTimer > 0) {
+      clearInterval(this.statusTimer);
+    }
+    this.timeText = formatClock();
+    this.statusTimer = setInterval(() => {
+      if (this.pageDestroyed) {
+        return;
+      }
+      this.timeText = formatClock();
+      // 电量由系统电池事件实时驱动，定时器仅作低频兜底同步
+      this.batteryCharging = readCharging();
+      this.batterySoc = readSoc();
+    }, 15000);
+  }
+
+  /**
+   * 订阅系统电池变化公共事件（COMMON_EVENT_BATTERY_CHANGED），
+   * 电量 / 充电状态变化时实时刷新状态条电池图标，而非进入页面读取一次。
+   */
+  private startBatteryMonitor(): void {
+    this.batteryCharging = readCharging();
+    this.batterySoc = readSoc();
+    try {
+      const subscribeInfo: commonEventManager.CommonEventSubscribeInfo = {
+        events: [commonEventManager.Support.COMMON_EVENT_BATTERY_CHANGED]
+      };
+      commonEventManager.createSubscriber(subscribeInfo,
+        (err: BusinessError, subscriber: commonEventManager.CommonEventSubscriber) => {
+          if (err) {
+            return;
+          }
+          this.batterySubscriber = subscriber;
+          this.batteryCharging = readCharging();
+          this.batterySoc = readSoc();
+          commonEventManager.subscribe(this.batterySubscriber,
+            (_subErr: BusinessError, _data: commonEventManager.CommonEventData) => {
+              if (this.pageDestroyed) {
+                return;
+              }
+              this.batteryCharging = readCharging();
+              this.batterySoc = readSoc();
+            });
+        });
+    } catch (e) {
+      // 订阅失败不影响阅读器使用，电量图标保持定时兜底更新
+    }
+  }
+
+  private stopBatteryMonitor(): void {
+    if (this.batterySubscriber !== null) {
+      const sub: commonEventManager.CommonEventSubscriber = this.batterySubscriber;
+      this.batterySubscriber = null;
+      commonEventManager.unsubscribe(sub);
+    }
+  }
+
+  private updateChapterPageInfo(): void {
+    const chapterIdx: number = this.engine.getCurrentChapterIndex();
+    this.chapterTotalPages = Math.max(1, this.engine.getChapterPageCount(chapterIdx));
+    // 章节起始全局页（0-based）前缀和
+    let chapterStart: number = 0;
+    for (let i = 0; i < chapterIdx; i++) {
+      chapterStart += this.engine.getChapterPageCount(i);
+    }
+    // 章节内当前页 = 全局偏移 - 章节起始 + 1（基于全局页码，避免引擎局部索引错位）
+    const curGlobal: number = Math.max(0, this.engine.getGlobalPageNumber() - 1);
+    this.chapterCurrentPage = Math.max(1, Math.min(this.chapterTotalPages, curGlobal - chapterStart + 1));
+  }
+
+  /** 页码显示文本（章节页数 / 总页数 / 进度百分比 三种模式） */
+  private pageNumberText(): string {
+    if (this.pageNumberMode === ReaderPageNumberMode.CHAPTER) {
+      return this.chapterCurrentPage + '/' + this.chapterTotalPages;
+    }
+    const pct: number = this.totalPages > 0 ? Math.round(this.currentPageNum / this.totalPages * 100) : 0;
+    if (this.pageNumberMode === ReaderPageNumberMode.PERCENT) {
+      return pct + '%';
+    }
+    return this.currentPageNum + '/' + this.totalPages;
+  }
+
+  private currentProgress(): number {
+    if (this.totalPages <= 1) {
+      return 0;
+    }
+    return Math.max(0, Math.min(1, (this.currentPageNum - 1) / (this.totalPages - 1)));
+  }
+
+  // ==================== 阅读设置应用 ====================
+
+  private applyFontSizeLevel(level: number, persist: boolean): void {
+    const clamped: number = Math.max(1, Math.min(FONT_SIZE_LEVELS.length, level));
+    this.fontSizeLevel = clamped;
+    const size: number = FONT_SIZE_LEVELS[clamped - 1];
+    this.engine.getFontSizeController().setUserFontSize(size);
+    this.engine.getFontSizeController().applyUserFontSize();
+    this.refreshPage();
+    if (persist) {
+      this.persistSettings();
+    }
+  }
+
+  private applyLineSpacingLevel(level: number, persist: boolean): void {
+    const clamped: number = Math.max(1, Math.min(LINE_SPACING_LEVELS.length, level));
+    this.lineSpacingLevel = clamped;
+    const spacing: number = LINE_SPACING_LEVELS[clamped - 1];
+    this.engine.setLayoutProfile({ lineSpacing: spacing });
+    this.refreshPage();
+    if (persist) {
+      this.persistSettings();
+    }
+  }
+
+  private applyTextAlign(align: ReaderTextAlign, persist: boolean): void {
+    this.textAlignMode = align;
+    // 'auto'：不覆盖布局对齐（沿用引擎/书本默认排版），其余直通 LayoutProfile
+    if (align === 'left' || align === 'right' || align === 'justify') {
+      this.engine.setLayoutProfile({ textAlign: align });
+      this.refreshPage();
+    }
+    if (persist) {
+      this.persistSettings();
+    }
+  }
+
+  /** 跳转到全局进度 */
+  private goToProgress(v: number): void {
+    const ok: boolean = this.engine.goToProgress(v);
+    if (ok) {
+      this.refreshPage();
+    }
+  }
+
+  /**
+   * 进度行左右翻页按钮：仅更新阅读内容，不销毁 / 不重建底部控制栏实例，
+   * 控制栏展开状态保持不丢失（控制栏状态独立于阅读内容生命周期）。
+   */
+  private turnPageBy(direction: TurnDirection): void {
+    if (this.pageDestroyed) {
+      return;
+    }
+    const ok: boolean = this.engine.turnPage(direction);
+    if (ok) {
+      this.refreshPage();
+    } else {
+      this.pageRenderer.renderPage();
+    }
+  }
+
+  /** 应用系统/导入字体（注册/复用为自定义字体主题并切换） */
+  private applyFontFamily(family: string): void {
+    if (family.length === 0) {
+      return;
+    }
+    const mgr = this.engine.getFontThemeManager();
+    const id: string = 'sys-' + family;
+    const exists: boolean = mgr.getAllThemes().some((t: FontTheme): boolean => t.id === id);
+    if (!exists) {
+      const theme: FontTheme = {
+        id: id,
+        name: family,
+        fontFamily: family,
+        cjkFontFamily: family,
+        monospaceOverride: 'monospace',
+        loadingStrategy: 'none'
+      };
+      mgr.addCustomTheme(theme);
+    }
+    mgr.switchTheme(id);
+    this.currentFontThemeId = id;
+    this.refreshPage();
+    this.persistSettings();
+  }
+
+  /**
+   * 拖动进度条浮层信息：真实章节名 + 页码/总页码。
+   * 将全局进度换算为全局页号，再经章节页数前缀和定位章节。
+   */
+  private querySeekInfo(v: number): SeekInfo {
+    const total: number = this.totalPages;
+    if (total <= 1) {
+      const fallback: string = this.chapterTitleAt(0);
+      return { title: fallback, pageNum: total, totalPages: total };
+    }
+    const target: number = Math.max(1, Math.min(total,
+      Math.round(v * (total - 1)) + 1));
+    const pub = this.engine.getPublication();
+    const chapters: number = pub !== undefined ? pub.getChapterCount() : 0;
+    let chapterIdx: number = 0;
+    let start: number = 1;
+    for (let i = 0; i < chapters; i++) {
+      const cnt: number = Math.max(1, this.engine.getChapterPageCount(i));
+      if (target <= start + cnt - 1) {
+        chapterIdx = i;
+        break;
+      }
+      start += cnt;
+    }
+    const title: string = this.chapterTitleAt(chapterIdx);
+    return { title: title, pageNum: target, totalPages: total };
+  }
+
+  /** 章节真实标题：优先章节 Link.title（TXT 等解析器写入），再回退到目录匹配，最后「第 N 章」 */
+  private chapterTitleAt(chapterIdx: number): string {
+    const pub = this.engine.getPublication();
+    if (pub === undefined) {
+      return '第 ' + (chapterIdx + 1) + ' 章';
+    }
+    const link = pub.getChapterLink(chapterIdx);
+    const directTitle: string | undefined = link !== undefined ? link.title : undefined;
+    if (directTitle !== undefined && directTitle.length > 0) {
+      return directTitle;
+    }
+    const toc: TocItem[] = this.engine.getTableOfContents();
+    for (let t = 0; t < toc.length; t++) {
+      const th: string = (toc[t].href ?? '').split('#')[0];
+      if (th.length === 0) {
+        continue;
+      }
+      for (let i = 0; i < pub.getChapterCount(); i++) {
+        const chapterLink = pub.getChapterLink(i);
+        if (chapterLink !== undefined && (chapterLink.href ?? '').split('#')[0] === th) {
+          if (i === chapterIdx) {
+            return toc[t].title;
+          }
+          break;
+        }
+      }
+    }
+    return '第 ' + (chapterIdx + 1) + ' 章';
+  }
+
+  // ==================== 自动翻页 ====================
+
+  private startAutoTurn(): void {
+    hilog.info(0x0000, INDEX_TAG, 'startAutoTurn enter autoSpeed=%{public}d cur=%{public}d total=%{public}d state=%{public}s pub=%{public}d',
+      Math.round(this.autoSpeed * 100), this.engine.getGlobalPageNumber(), this.engine.getTotalPages(),
+      this.engine.getState(), this.engine.getPublication() !== undefined ? 1 : 0);
+    this.autoTurning = true;
+    this.showAutoTurnBar = false;
+    this.hideControls();
+    this.startAutoTurnTimer();
+  }
+
+  private stopAutoTurn(): void {
+    hilog.info(0x0000, INDEX_TAG, 'stopAutoTurn enter autoTurning=%{public}d timer=%{public}d cur=%{public}d total=%{public}d',
+      this.autoTurning ? 1 : 0, this.autoTurnTimer, this.engine.getGlobalPageNumber(), this.engine.getTotalPages());
+    this.autoTurning = false;
+    this.showAutoTurnBar = false;
+    if (this.autoTurnTimer > 0) {
+      clearInterval(this.autoTurnTimer);
+      this.autoTurnTimer = -1;
+    }
+  }
+
+  private startAutoTurnTimer(): void {
+    hilog.info(0x0000, INDEX_TAG, 'startAutoTurnTimer enter autoTurning=%{public}d autoSpeed=%{public}d timer=%{public}d',
+      this.autoTurning ? 1 : 0, Math.round(this.autoSpeed * 100), this.autoTurnTimer);
+    if (this.autoTurnTimer > 0) {
+      clearInterval(this.autoTurnTimer);
+      this.autoTurnTimer = -1;
+    }
+    if (!this.autoTurning) {
+      return;
+    }
+    const interval: number = Math.max(500, Math.round(3000 / this.autoSpeed));
+    hilog.info(0x0000, INDEX_TAG, 'startAutoTurnTimer schedule interval=%{public}d', interval);
+    this.autoTurnTimer = setInterval(() => {
+      if (this.pageDestroyed || !this.autoTurning || this.showAutoTurnBar) {
+        hilog.info(0x0000, INDEX_TAG, 'autoTick skip destroyed=%{public}d turning=%{public}d bar=%{public}d',
+          this.pageDestroyed ? 1 : 0, this.autoTurning ? 1 : 0, this.showAutoTurnBar ? 1 : 0);
+        return;
+      }
+      hilog.info(0x0000, INDEX_TAG, 'autoTick before cur=%{public}d total=%{public}d state=%{public}s pub=%{public}d pageSlots=%{public}d',
+        this.engine.getGlobalPageNumber(), this.engine.getTotalPages(),
+        this.engine.getState(), this.engine.getPublication() !== undefined ? 1 : 0,
+        this.engine.getPageByGlobalIndex(0) !== undefined ? 1 : 0);
+      const ok: boolean = this.engine.turnPage(TurnDirection.FORWARD);
+      hilog.info(0x0000, INDEX_TAG, 'autoTick turnPage=%{public}d after cur=%{public}d total=%{public}d state=%{public}s',
+        ok ? 1 : 0, this.engine.getGlobalPageNumber(), this.engine.getTotalPages(), this.engine.getState());
+      if (ok) {
+        this.refreshPage();
+      } else {
+        // 到最后一页自动停止；未到末页的异常失败保留自动翻页并告警（避免误停）
+        const cur: number = this.engine.getGlobalPageNumber();
+        const total: number = this.engine.getTotalPages();
+        if (cur >= total) {
+          this.stopAutoTurn();
+        } else {
+          hilog.warn(0x0000, INDEX_TAG, 'autoTick turnPage=false but cur=%{public}d<total=%{public}d, keep auto turn', cur, total);
+        }
+      }
+    }, interval);
+  }
+
+  private restartAutoTurnTimer(): void {
+    if (this.autoTurning && !this.showAutoTurnBar) {
+      this.startAutoTurnTimer();
+    }
+  }
+
+  /** 自动翻页中点击正文：唤起自动翻页控制栏（暂停自动翻页） */
+  private onAutoTurnTap(): void {
+    hilog.info(0x0000, INDEX_TAG, 'onAutoTurnTap enter autoTurning=%{public}d bar=%{public}d',
+      this.autoTurning ? 1 : 0, this.showAutoTurnBar ? 1 : 0);
+    if (!this.autoTurning) {
+      return;
+    }
+    if (this.autoTurnTimer > 0) {
+      clearInterval(this.autoTurnTimer);
+      this.autoTurnTimer = -1;
+    }
+    this.showAutoTurnBar = true;
+  }
+
+  // ==================== 选择 / 标注 ====================
+
+  private clearSelection(): void {
+    this.selection = null;
+    this.pageRenderer.renderPage();
+  }
+
+  /** 根据选区创建标注（高亮/划线/笔记） */
+  private addAnnotationFromSelection(type: AnnotationType, noteText?: string): void {
+    if (this.selection === null) {
+      return;
+    }
+    const pub = this.engine.getPublication();
+    if (pub === undefined) {
+      return;
+    }
+    const bookId: string = pub.getMetadata().title;
+    const now: string = new Date().toISOString();
+    const nowMs: number = new Date().getTime();
+    const chapterIdx: number = this.engine.getCurrentChapterIndex();
+    const loc: Locator = {
+      href: '',
+      chapterIndex: chapterIdx,
+      paragraphIndex: this.selection.startCharOffset,
+      wordIndex: this.selection.endCharOffset
+    } as Locator;
+    const ann: Annotation = {
+      id: 'ann_' + now + '_' + Math.floor(Math.random() * 100000),
+      type: type,
+      locator: loc,
+      text: this.selection.text,
+      note: noteText !== undefined ? noteText : '',
+      color: undefined,
+      created: now,
+      modified: now,
+      chapterIndex: chapterIdx,
+      startCharOffset: this.selection.startCharOffset,
+      endCharOffset: this.selection.endCharOffset,
+      synchronizationVersion: 0,
+      noteText: noteText !== undefined ? noteText : undefined,
+      noteTimestamp: nowMs,
+      createdAt: nowMs,
+      updatedAt: nowMs,
+      isVisible: 1
+    };
+    this.engine.getAnnotationStorage().save(bookId, ann);
+    this.annotations.push(ann);
+    this.engine.syncAnnotations(this.annotations);
+    this.selection = null;
+    this.pageRenderer.renderPage();
+  }
+
+  /** 判断选区是否需要显示翻译（非系统语言） */
+  private isNonSystemLanguage(text: string): boolean {
+    if (text.length === 0) {
+      return false;
+    }
+    // 简化的脚本判定：含 CJK 视为中文，其余视为非中文
+    let hasCJK: boolean = false;
+    for (let i = 0; i < Math.min(text.length, 64); i++) {
+      const code: number = text.charCodeAt(i);
+      if ((code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3400 && code <= 0x4DBF)) {
+        hasCJK = true;
+        break;
+      }
+    }
+    // 系统 UI 语言（简化为中文设备）：系统语言为中文 → 非中文文本显示翻译
+    const sysLang: string = 'zh';
+    if (sysLang === 'zh') {
+      return !hasCJK && this.hasLetters(text);
+    }
+    return hasCJK;
+  }
+
+  private hasLetters(text: string): boolean {
+    for (let i = 0; i < Math.min(text.length, 64); i++) {
+      const code: number = text.charCodeAt(i);
+      if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private showPlaceholderToast(msg: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: msg });
+    } catch (_e) {
+    }
+  }
+
+  private isSingleWord(text: string): boolean {
+    return text.length > 0 && !text.includes(' ') && !text.includes('\t') && !text.includes('\n');
+  }
+
+  /** 依据当前页行盒重建选区文本（起止偏移为本章全局字符偏移） */
+  private computeSelectionText(s: SelectionRange): string {
+    if (s.startCharOffset > s.endCharOffset) {
+      const tmp: number = s.startCharOffset;
+      s.startCharOffset = s.endCharOffset;
+      s.endCharOffset = tmp;
+    }
+    let out: string = '';
+    const lines: LineBox[] = this.pageLines;
+    for (let i = 0; i < lines.length; i++) {
+      const line: LineBox = lines[i];
+      const lineStart: number = line.startCharOffset;
+      const lineLen: number = line.text.length;
+      const lineEnd: number = lineStart + lineLen;
+      const lo: number = Math.max(s.startCharOffset, lineStart);
+      const hi: number = Math.min(s.endCharOffset + 1, lineEnd);
+      if (lo < hi) {
+        out += line.text.substring(lo - lineStart, hi - lineStart);
+      }
+    }
+    return out;
+  }
+
+  // ==================== 目录 / 书签 / 笔记 ====================
+
+  /** 有书签的章节索引集合 */
+  private bookmarkChapterSet(): Set<number> {
+    const set: Set<number> = new Set();
+    for (let i = 0; i < this.bookmarks.length; i++) {
+      const bm: Bookmark = this.bookmarks[i];
+      if (bm.chapterIndex >= 0) {
+        set.add(bm.chapterIndex);
+      }
+    }
+    return set;
+  }
+
+  /** 有笔记/标注的章节索引集合 */
+  private noteChapterSet(): Set<number> {
+    const set: Set<number> = new Set();
+    for (let i = 0; i < this.annotations.length; i++) {
+      const ci: number | undefined = this.annotations[i].chapterIndex;
+      if (ci !== undefined && ci >= 0) {
+        set.add(ci);
+      }
+    }
+    return set;
+  }
+
+  /** 目录项 → 章节索引（与 isCurrentTocItem 同源） */
+  private tocChapterIndices(): number[] {
+    const pub = this.engine.getPublication();
+    const toc: TocItem[] = this.engine.getTableOfContents();
+    const result: number[] = [];
+    for (let t = 0; t < toc.length; t++) {
+      const itemHref: string = (toc[t].href ?? '').split('#')[0];
+      let found: number = -1;
+      if (pub !== undefined) {
+        for (let i = 0; i < pub.getChapterCount(); i++) {
+          const link = pub.getChapterLink(i);
+          if (link !== undefined && (link.href ?? '').split('#')[0] === itemHref) {
+            found = i;
+            break;
+          }
+        }
+      }
+      result.push(found);
+    }
+    return result;
+  }
+
+  /** 当前书籍标题（目录卡片封面行展示） */
+  private currentBookTitle(): string {
+    const pub = this.engine.getPublication();
+    return pub !== undefined ? pub.getMetadata().title : '';
+  }
+
+  /** 封面绝对路径：相对路径基于书籍资源基路径解析（无封面返回空串） */
+  private resolvedCoverPath(): string {
+    const pub = this.engine.getPublication();
+    if (pub === undefined) {
+      return '';
+    }
+    const coverPath: string | undefined = pub.getMetadata().coverPath;
+    if (coverPath === undefined || coverPath.length === 0) {
+      return '';
+    }
+    if (coverPath.startsWith('/') || coverPath.startsWith('file://')) {
+      return coverPath;
+    }
+    return this.pageRenderer.getBookBasePath() + '/' + coverPath;
+  }
+
+  /** 目录项 → 章节起始全局页码（前缀和；无法定位为 -1） */
+  private tocPageNumbers(): number[] {
+    const pub = this.engine.getPublication();
+    const toc: TocItem[] = this.engine.getTableOfContents();
+    const result: number[] = [];
+    if (pub === undefined) {
+      for (let t = 0; t < toc.length; t++) {
+        result.push(-1);
+      }
+      return result;
+    }
+    let start: number = 1;
+    for (let t = 0; t < toc.length; t++) {
+      const itemHref: string = (toc[t].href ?? '').split('#')[0];
+      let found: number = -1;
+      for (let i = 0; i < pub.getChapterCount(); i++) {
+        const link = pub.getChapterLink(i);
+        if (link !== undefined && (link.href ?? '').split('#')[0] === itemHref) {
+          found = i;
+          break;
+        }
+      }
+      if (found >= 0) {
+        result.push(start);
+        start += Math.max(1, this.engine.getChapterPageCount(found));
+      } else {
+        result.push(-1);
+      }
+    }
+    return result;
+  }
+
+  // 判断目录项是否为"包含当前页的章节"（高亮显示）
+  private isCurrentTocItem(item: TocItem): boolean {
+    const pub = this.engine.getPublication();
+    if (pub === undefined) {
+      return false;
+    }
+    const curIdx: number = this.engine.getCurrentChapterIndex();
+    const itemHref: string = (item.href ?? '').split('#')[0];
+    if (itemHref.length === 0) {
+      return false;
+    }
+    let itemIdx: number = -1;
+    for (let i = 0; i < pub.getChapterCount(); i++) {
+      const link = pub.getChapterLink(i);
+      if (link !== undefined && (link.href ?? '').split('#')[0] === itemHref) {
+        itemIdx = i;
+        break;
+      }
+    }
+    if (itemIdx < 0) {
+      return false;
+    }
+    const toc: TocItem[] = this.engine.getTableOfContents();
+    let lastValid: number = -1;
+    for (let t = 0; t < toc.length; t++) {
+      const th: string = (toc[t].href ?? '').split('#')[0];
+      let ti: number = -1;
+      for (let i = 0; i < pub.getChapterCount(); i++) {
+        const link = pub.getChapterLink(i);
+        if (link !== undefined && (link.href ?? '').split('#')[0] === th) {
+          ti = i;
+          break;
+        }
+      }
+      if (ti >= 0 && ti <= curIdx) {
+        lastValid = ti;
+      }
+    }
+    return lastValid === itemIdx;
+  }
+
+  /**
+   * 下拉添加书签成功：以当前章节 + 章节内起始字符偏移作为唯一锚点，
+   * 若已存在同位置书签则移除（切换），否则新增。持久化后立即刷新
+   * 目录列表书签状态、笔记区域状态与阅读页面渲染。
+   */
+  private toggleBookmarkAtCurrentPage(): void {
+    const pub = this.engine.getPublication();
+    if (pub === undefined) {
+      return;
+    }
+    const bookId: string = pub.getMetadata().title;
+    const chapterIdx: number = this.engine.getCurrentChapterIndex();
+    const page = this.engine.getCurrentPage();
+    const charOffset: number = page !== undefined && page.lines.length > 0
+      ? page.lines[0].startCharOffset : 0;
+    let existingId: string = '';
+    for (let i = 0; i < this.bookmarks.length; i++) {
+      const bm: Bookmark = this.bookmarks[i];
+      if (bm.chapterIndex === chapterIdx && bm.charOffset === charOffset) {
+        existingId = bm.id;
+        break;
+      }
+    }
+    if (existingId.length > 0) {
+      this.bookmarkStorage.remove(bookId, existingId);
+      const kept: Bookmark[] = [];
+      for (let i = 0; i < this.bookmarks.length; i++) {
+        if (this.bookmarks[i].id !== existingId) {
+          kept.push(this.bookmarks[i]);
+        }
+      }
+      this.bookmarks = kept;
+      hilog.info(0x0000, INDEX_TAG, 'bookmark toggled OFF ch=%{public}d, left=%{public}d', chapterIdx, kept.length);
+      this.showPlaceholderToast('已移除书签');
+    } else {
+      const now: number = Date.now();
+      const chapterLink = pub.getChapterLink(chapterIdx);
+      const preview: string = page !== undefined && page.lines.length > 0 ? page.lines[0].text : '';
+      const bm: Bookmark = {
+        id: 'bm_' + now + '_' + chapterIdx,
+        chapterIndex: chapterIdx,
+        charOffset: charOffset,
+        chapterHref: chapterLink !== undefined ? chapterLink.href : undefined,
+        textPreview: preview.length > 40 ? preview.substring(0, 40) : preview,
+        createdAt: now,
+        type: 'bookmark'
+      };
+      this.bookmarkStorage.save(bookId, bm);
+      this.bookmarks.push(bm);
+      hilog.info(0x0000, INDEX_TAG, 'bookmark toggled ON ch=%{public}d total=%{public}d offset=%{public}d',
+        chapterIdx, this.bookmarks.length, charOffset);
+      this.showPlaceholderToast('已添加书签');
+    }
+    this.pageRenderer.renderPage();
+  }
+
+  /** 下拉位移变化（含拖动 / 弹簧回弹）：逐帧驱动画布重绘书签填充动画 */
+  private onPullDistanceChanged(): void {
+    if (this.pageDestroyed) {
+      return;
+    }
+    this.pageRenderer.renderPage();
+  }
+
+  private refreshPage(): void {
+    const page = this.engine.getCurrentPage();
+    if (page !== undefined) {
+      this.pageLines = page.lines;
+    }
+    this.currentPageNum = this.engine.getGlobalPageNumber();
+    this.totalPages = this.engine.getTotalPages();
+    this.updateChapterPageInfo();
+    this.selection = null; // 换页清除选词
+    if (page !== undefined) {
+      this.pageRenderer.prefetchRemoteImages(page.lines);
+      const lines: LineBox[] = page.lines;
+      for (let i = 0; i < lines.length; i++) {
+        const src: string | undefined = lines[i].imageSrc;
+        if (src !== undefined && src.length > 0 && !(src.startsWith('http://') || src.startsWith('https://'))) {
+          this.pageRenderer.preloadLocalImage(src);
+        }
+        const markerSrc: string | undefined = lines[i].markerImageSrc;
+        if (markerSrc !== undefined && markerSrc.length > 0 && !(markerSrc.startsWith('http://') || markerSrc.startsWith('https://'))) {
+          this.pageRenderer.preloadLocalImage(markerSrc);
+        }
+      }
+    }
+    this.pageRenderer.prefetchNextPageImages();
+    this.pageRenderer.renderPage();
+  }
+
+  // ── Export ──
+  private exportAnnotations(format: string): void {
+    const pub = this.engine.getPublication();
+    let bookTitle: string = 'Unknown';
+    let chapterTitles: string[] = [];
+    if (pub !== undefined) {
+      bookTitle = pub.getMetadata().title;
+      const toc = pub.getToc();
+      if (toc !== undefined) {
+        for (let i: number = 0; i < toc.length; i++) {
+          chapterTitles.push(toc[i].title);
+        }
+      }
+    }
+    let content: string = '';
+    let ext: string = '';
+    if (format === 'json') {
+      content = AnnotationExporter.toJson(this.annotations);
+      ext = 'json';
+    } else if (format === 'markdown') {
+      content = AnnotationExporter.toMarkdown(this.annotations, chapterTitles);
+      ext = 'md';
+    } else if (format === 'html') {
+      content = AnnotationExporter.toHtml(this.annotations, bookTitle, chapterTitles);
+      ext = 'html';
+    } else if (format === 'csv') {
+      content = AnnotationExporter.toCsv(this.annotations);
+      ext = 'csv';
+    } else {
+      return;
+    }
+    const hostCtx: Context | undefined = this.getUIContext().getHostContext();
+    if (hostCtx === undefined) {
+      return;
+    }
+    const ctx: Context = hostCtx;
+    try {
+      const path: string = ctx.filesDir + '/annotations.' + ext;
+      const file: fileIo.File = fileIo.openSync(path,
+        fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.TRUNC);
+      fileIo.writeSync(file.fd, content);
+      fileIo.closeSync(file);
+    } catch (e) {
+    }
+  }
+
+  private saveThemePreference(themeId: string): void {
+    const ctx: Context | undefined = this.getUIContext().getHostContext();
+    if (ctx !== undefined) {
+      new ThemePreferenceStorage().save(ctx, themeId);
+    }
+  }
+
+private hideControls(): void {
+    this.showControls = false;
+    this.showSettings = false;
+  }
+
+  private getReaderViewport(): ReaderViewport {
+    return {
+      canvasW: this.canvasW,
+      canvasH: this.canvasH,
+      contentWidth: this.contentWidth,
+      contentHeight: this.contentHeight,
+      margins: this.margins,
+      avoidAreaTopVp: this.avoidAreaTopVp
+    };
+  }
+
+  // ==================== 选区菜单锚点 ====================
+
+  private updateSelectionMenu(): void {
+    if (this.selection === null) {
+      return;
+    }
+    const s: SelectionRange = this.selection;
+    // 计算菜单锚点：选区的第一行上方（内容坐标 → 全屏 vp）
+    const lines: LineBox[] = this.pageLines;
+    if (s.startLineIndex >= 0 && s.startLineIndex < lines.length) {
+      const startLine: LineBox = lines[s.startLineIndex];
+      const startLocal: number = Math.max(0, s.startCharOffset - startLine.startCharOffset);
+      let ax: number = this.margins.left + (startLine.charPositions.length > 0
+        ? startLine.charPositions[Math.min(startLocal, startLine.charPositions.length - 1)]
+        : 0);
+      let ay: number = this.margins.top + this.avoidAreaTopVp + startLine.renderedY - 44;
+      if (ax + 210 > this.canvasW) {
+        ax = this.canvasW - 214;
+      }
+      if (ay < this.avoidAreaTopVp + 8) {
+        ay = this.avoidAreaTopVp + 8;
+      }
+      this.selectionMenuX = ax;
+      this.selectionMenuY = ay;
+    }
+    this.showTranslate = this.isNonSystemLanguage(s.text);
+    this.showDictionary = this.isSingleWord(s.text);
+  }
+}

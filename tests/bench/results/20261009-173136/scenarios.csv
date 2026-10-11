@@ -1,0 +1,9 @@
+id,scenario,bookPath,start_epoch_ms,end_epoch_ms,rss_kb
+bench_cbz,cold,/data/storage/el2/base/haps/entry/files/books/bench_cbz.cbz,1791538300221,1791538312646,155908
+bench_cbz,warm,/data/storage/el2/base/haps/entry/files/books/bench_cbz.cbz,1791538317938,1791538330354,157704
+bench_pdf,cold,/data/storage/el2/base/haps/entry/files/books/bench_pdf.pdf,1791538336503,1791538348901,150640
+bench_pdf,warm,/data/storage/el2/base/haps/entry/files/books/bench_pdf.pdf,1791538353747,1791538366159,149808
+bench_txt_l,cold,/data/storage/el2/base/haps/entry/files/books/bench_txt_l.txt,1791538371204,1791538383606,218452
+bench_txt_l,warm,/data/storage/el2/base/haps/entry/files/books/bench_txt_l.txt,1791538388417,1791538400821,219284
+bench_txt_xl,cold,/data/storage/el2/base/haps/entry/files/books/bench_txt_xl.txt,1791538406103,1791538466634,236272
+bench_txt_xl,warm,/data/storage/el2/base/haps/entry/files/books/bench_txt_xl.txt,1791538474903,1791538535451,236036

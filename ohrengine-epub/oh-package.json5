@@ -1,0 +1,9 @@
+{
+  "name": "ohrengine-epub",
+  "version": "1.0.0",
+  "description": "OhEngine EPUB format exclusive features (EPUB container/OPF/NCX/SMIL parsing, cover extraction, media overlays)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common"
+  }
+}

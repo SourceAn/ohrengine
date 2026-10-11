@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_ui_render",
+    "type": "har",
+    "description": "OhEngine layout engine, renderers, and core engine facade",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "stamp": "20261009-170525",
+  "device": "127.0.0.1:5555",
+  "model": "emulator",
+  "kind": "DevEco 模拟器（虚拟机）",
+  "api": "26",
+  "softwareVersion": "emulator 7.0.0.32(SP8DEVC00E32R4P11)",
+  "bundle": "com.example.ohrengine",
+  "scenarios": "cold,warm",
+  "waitSec": 12
+}

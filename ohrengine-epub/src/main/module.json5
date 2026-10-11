@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_epub",
+    "type": "har",
+    "description": "OhEngine EPUB format exclusive features",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

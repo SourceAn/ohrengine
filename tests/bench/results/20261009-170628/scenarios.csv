@@ -1,0 +1,3 @@
+id,scenario,bookPath,start_epoch_ms,end_epoch_ms,rss_kb
+bench_txt_s,cold,/data/storage/el2/base/haps/entry/files/books/bench_txt_s.txt,1791536796289,1791536808422,315404
+bench_txt_s,warm,/data/storage/el2/base/haps/entry/files/books/bench_txt_s.txt,1791536813335,1791536825483,277592

@@ -1,0 +1,7 @@
+id,phase,create2shelf_ms,shelf2init_ms,init2open_ms,open2total_ms,total_ms,pages,inode,open_ok
+bench_demo,cold,RESULT|bench_demo-cold|create2shelf=-|shelf2init=-|init2open=59|open2total=71|total=-|pages=6|open_total_found=yes
+bench_demo,cold,,,,,,,,no
+bench_demo,warm,,,,,,,,no
+bench_epub_s,cold,RESULT|bench_epub_s-cold|create2shelf=-|shelf2init=-|init2open=66|open2total=72|total=-|pages=305|open_total_found=yes
+bench_epub_s,cold,,,,,,,708678,yes(重解压)
+bench_epub_s,warm,,,,,,,708678,no

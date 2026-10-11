@@ -1,0 +1,5 @@
+run_id,date,device,build,format,corpus_id,state,entry,exit,T_total,T_launch,T_shelf,T_prep,T_parse,T_layout,T_render,T_restore,re_extracted,inode_before,inode_after,files_before,files_after,bytes_after,pss_peak_mb,valid,invalid_reason
+bench_epub_s-L2-1,2026-10-09,PLA-AL10,PLA-AL10 7.0.0.109(SP6C00E105R7P3),epub,bench_epub_s.epub,L2,shelf,kill,,554,,,,,,1,none,1541034,0,67,3658,,0,no-firstframewarmup;
+bench_epub_s-L2-2,2026-10-09,PLA-AL10,PLA-AL10 7.0.0.109(SP6C00E105R7P3),epub,bench_epub_s.epub,L2,shelf,kill,,537,,,,,,1,none,1541764,0,67,3658,,0,no-firstframewarmup;
+bench_epub_s-L2-3,2026-10-09,PLA-AL10,PLA-AL10 7.0.0.109(SP6C00E105R7P3),epub,bench_epub_s.epub,L2,shelf,kill,,524,,,,,,1,none,1542807,0,67,3658,,0,no-firstframe
+bench_epub_s-L2-4,2026-10-09,PLA-AL10,PLA-AL10 7.0.0.109(SP6C00E105R7P3),epub,bench_epub_s.epub,L2,shelf,kill,,526,,,,,,1,none,629164,0,67,3658,,0,no-firstframe

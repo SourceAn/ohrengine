@@ -1,0 +1,6 @@
+{
+  "name": "libliquidglass.so",
+  "types": "./index.d.ts",
+  "version": "1.0.0",
+  "description": "Liquid Glass native renderer (EGL + OpenGL ES 3.0), arm64-v8a only."
+}

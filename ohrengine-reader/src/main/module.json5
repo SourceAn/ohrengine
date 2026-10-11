@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_reader",
+    "type": "har",
+    "description": "OhEngine reusable reader host (EPUB/TXT)",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

@@ -1,0 +1,8 @@
+id,scenario,bookPath,start_epoch_ms,end_epoch_ms,rss_kb
+bench_cbz,cold,/data/storage/el2/base/haps/entry/files/books/bench_cbz.cbz,1791537105411,1791537117549,266908
+bench_cbz,warm,/data/storage/el2/base/haps/entry/files/books/bench_cbz.cbz,1791537122269,1791537134407,264408
+bench_pdf,cold,/data/storage/el2/base/haps/entry/files/books/bench_pdf.pdf,1791537138914,1791537151055,239392
+bench_pdf,warm,/data/storage/el2/base/haps/entry/files/books/bench_pdf.pdf,1791537155273,1791537167403,251632
+bench_txt_l,cold,/data/storage/el2/base/haps/entry/files/books/bench_txt_l.txt,1791537171900,[Fail][E001005] Device not found or connected,n/a
+bench_txt_l,warm,/data/storage/el2/base/haps/entry/files/books/bench_txt_l.txt,[Fail][E001005] Device not found or connected,[Fail][E001005] Device not found or connected,n/a
+bench_txt_xl,cold,/data/storage/el2/base/haps/entry/files/books/bench_txt_xl.txt,[Fail][E001005] Device not found or connected,[Fail][E001005] Device not found or connected,n/a

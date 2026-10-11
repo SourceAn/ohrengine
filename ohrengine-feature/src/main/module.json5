@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_feature",
+    "type": "har",
+    "description": "OhEngine reader feature module",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}

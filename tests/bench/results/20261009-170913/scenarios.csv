@@ -1,0 +1,9 @@
+id,scenario,bookPath,start_epoch_ms,end_epoch_ms,rss_kb
+bench_demo,cold,/data/storage/el2/base/haps/entry/files/books/bench_demo.txt,1791536956352,1791536968498,262700
+bench_demo,warm,/data/storage/el2/base/haps/entry/files/books/bench_demo.txt,1791536973415,1791536985562,257956
+bench_epub_s,cold,/data/storage/el2/base/haps/entry/files/books/bench_epub_s.epub,1791536990000,1791537002154,336016
+bench_epub_s,warm,/data/storage/el2/base/haps/entry/files/books/bench_epub_s.epub,1791537007041,1791537019202,292984
+bench_txt_m,cold,/data/storage/el2/base/haps/entry/files/books/bench_txt_m.txt,1791537023654,1791537035807,326720
+bench_txt_m,warm,/data/storage/el2/base/haps/entry/files/books/bench_txt_m.txt,1791537041718,1791537053865,333164
+bench_txt_s,cold,/data/storage/el2/base/haps/entry/files/books/bench_txt_s.txt,1791537058303,1791537070466,319244
+bench_txt_s,warm,/data/storage/el2/base/haps/entry/files/books/bench_txt_s.txt,1791537075147,1791537087319,269600

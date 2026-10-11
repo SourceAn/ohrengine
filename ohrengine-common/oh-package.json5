@@ -1,0 +1,7 @@
+{
+  "name": "ohrengine-common",
+  "version": "1.0.0",
+  "description": "OhEngine common types, models, services, and registries",
+  "main": "index.ets",
+  "dependencies": {}
+}

@@ -1,0 +1,3 @@
+{
+  "src": ["debug/DebugBookshelf", "debug/HdsMaterialHostPoc", "debug/MaterialScopeProbe", "debug/MaterialScopeDialogs", "debug/MaterialScopeInterfaces", "debug/MaterialScopeControls", "debug/MaterialScopeContrast", "pages/Bookshelf", "pages/Index", "pages/VocabularyListPage"]
+}

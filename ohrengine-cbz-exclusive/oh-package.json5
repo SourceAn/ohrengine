@@ -1,0 +1,9 @@
+{
+  "name": "ohrengine-cbz-exclusive",
+  "version": "1.0.0",
+  "description": "OhEngine CBZ format exclusive features (image decoding, sorting, cover extraction)",
+  "main": "index.ets",
+  "dependencies": {
+    "ohrengine-common": "file:../ohrengine-common"
+  }
+}

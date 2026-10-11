@@ -1,0 +1,8 @@
+{
+  "module": {
+    "name": "ohrengine_cbz_exclusive",
+    "type": "har",
+    "description": "OhEngine CBZ format exclusive features",
+    "deviceTypes": ["phone", "tablet"]
+  }
+}
